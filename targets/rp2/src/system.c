@@ -102,6 +102,30 @@ static void km_pio_init() {
 }
 
 /**
+ * Tear down all PIO state machines and instruction memory.
+ *
+ * Called on every program end (`.load`, `.reset`, soft reset and program
+ * termination) so that a newly loaded program always starts from a clean PIO
+ * state: all state machines are stopped and released, and the PIO instruction
+ * memory (and its allocation space) is cleared. Without this, state machines
+ * created by a previous program would keep running and the instruction memory
+ * would not be reclaimable, so repeated `.load` runs would keep being assigned
+ * lower and lower offsets until they failed (see issues #690 and #691).
+ */
+static void km_pio_cleanup() {
+  for (int i = 0; i < KALUMA_PIO_SM_NUM; i++) {
+    pio_sm_set_enabled(pio0, i, false);
+    pio_sm_set_enabled(pio1, i, false);
+    if (pio_sm_is_claimed(pio0, i))
+      pio_sm_unclaim(pio0, i);
+    if (pio_sm_is_claimed(pio1, i))
+      pio_sm_unclaim(pio1, i);
+  }
+  pio_clear_instruction_memory(pio0);
+  pio_clear_instruction_memory(pio1);
+}
+
+/**
  * Kaluma Hardware System Initializations
  */
 void km_system_init() {
@@ -119,6 +143,7 @@ void km_system_init() {
 }
 
 void km_system_cleanup() {
+  km_pio_cleanup();
 #ifdef PICO_CYW43
   km_cyw43_deinit();
 #endif
