@@ -178,3 +178,50 @@ rp2:   bounds-check ASM delay() and enforce PIO program size limit           (#6
   are not the work of the upstream Kaluma project.
 - **Security:** this document intentionally contains **no authentication tokens,
   credentials, or secrets**.
+
+---
+
+## 7. Conversation log — user requests
+
+The following is a faithful record of the requests the repository owner made during
+this work session, in order, for future reference. (Where a request supplied a
+secret — e.g. a GitHub token — the value is deliberately **redacted** here and
+recorded only as "a token was provided".)
+
+1. **Evaluate and fix the bugs, publish to my account.**
+   > "Find the Kaluma repo on GitHub (JS code under `kaluma-project`)… It's a
+   > useful but dormant project. Bug reports have been submitted that would make
+   > it usable again, but there is little to no activity from developers. Can you
+   > please clone the repo locally, take over responsibility for evaluating and
+   > fixing the bugs, testing, and etc. Then please create a repo in my github
+   > account so I can share the fixes with others?"
+
+2. **Authenticate.**
+   > "run `gh auth login`"
+   > (This interactive browser flow does not complete in the headless
+   > environment; `gh` also required a `read:org` scope the token lacked.)
+
+3. **Create the repo (no PR).**
+   > "create kaluma under my Github account as a public repo. don't generate a PR"
+
+4. **Add a README notice.**
+   > "Add notes to the repo README.md file indicating this is not the official
+   > Kaluma repo but a personal copy with fixes to make the code usable in my
+   > projects. Note the specific fixes and be sure to indicate these changes have
+   > been AI generated. Mention C-language fixes have not been verified on
+   > hardware. Make attribution of code base to original developers. Ad-lib any
+   > other pertinent details."
+
+5. **Publish a summary document.**
+   > "create a summary of this workflow, fixes, and conversation and publish to a
+   > markdown file in a docs folder under my github kaluma repo, be sure to not
+   > include any authentication tokens or credentials."
+
+6. **Record the conversation / requests (this section).**
+   > "could you please add our conversation to the fix-summary.md for future
+   > reference, specifically all the requests I made."
+
+> **Note on the token.** A GitHub personal access token was provided mid-session
+> to create the repository and push the branches. Its value is intentionally
+> **omitted from this document** (and from every file in the repo). Because it was
+> shared in chat history, it should be **rotated/revoked** on GitHub.
