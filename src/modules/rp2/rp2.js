@@ -70,7 +70,7 @@ class ASM {
       target: target,
     });
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   wait(pol, src, idx, rel) {
@@ -95,7 +95,7 @@ class ASM {
     }
     c |= idx;
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   in(src, bits) {
@@ -129,7 +129,7 @@ class ASM {
     }
     c |= bits;
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   out(dst, bits) {
@@ -167,7 +167,7 @@ class ASM {
     }
     c |= bits;
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   push(iffull, block = 1) {
@@ -175,7 +175,7 @@ class ASM {
     if (iffull === 1 || iffull === "iffull") c |= 0x0040;
     if (block === 1 || block === "block") c |= 0x0020;
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   pull(ifempty, block = 1) {
@@ -183,7 +183,7 @@ class ASM {
     if (ifempty === 1 || ifempty === "ifempty") c |= 0x0040;
     if (block === 1 || block === "block") c |= 0x0020;
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   mov(dst, src) {
@@ -251,7 +251,7 @@ class ASM {
         throw new Error("Unknown source of mov()");
     }
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   irq(cmd, irqnum, rel) {
@@ -284,7 +284,7 @@ class ASM {
       c |= 1 << 4;
     }
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   set(dst, val) {
@@ -311,7 +311,7 @@ class ASM {
     }
     c |= val;
     this.code.push(c);
-    return this;
+    return this.check();
   }
 
   nop() {
@@ -346,11 +346,39 @@ class ASM {
     return this;
   }
 
+  // Max valid delay cycles for this ASM. The delay and the sideset value share
+  // the same 5-bit field (bits 8-12 of a PIO instruction word): the sideset
+  // occupies the upper bits and the delay the lower bits, so the delay is
+  // limited to (5 - sideset) bits, or (5 - sideset - 1) bits when sideset is
+  // optional (the extra bit holds the sideset option flag). This mirrors
+  // pico-sdk's pio_encode_delay / pio_encode_sideset layout.
+  _maxDelay() {
+    let bits = this.sidesetOpt ? 4 - this.sideset : 5 - this.sideset;
+    if (bits < 0) bits = 0;
+    return (1 << bits) - 1;
+  }
+
   delay(val) {
+    const max = this._maxDelay();
+    if (typeof val !== "number" || val % 1 !== 0 || val < 0 || val > max) {
+      throw new RangeError(
+          `delay(${val}) out of range: must be an integer 0-${max}`);
+    }
     const i = this.code.length - 1;
     let c = this.code[i];
     c |= val << 8;
     this.code[i] = c;
+    return this;
+  }
+
+  // Enforce the PIO program size limit (32 instructions per PIO instance).
+  // Called at the end of every instruction so a program cannot silently
+  // exceed the hardware capacity.
+  check() {
+    if (this.code.length > 32) {
+      throw new RangeError(
+          `Program too long: ${this.code.length} instructions (max 32)`);
+    }
     return this;
   }
 
