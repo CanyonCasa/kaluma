@@ -22,7 +22,7 @@ set(JERRY_INC
 set(JERRY_ARGS
   --toolchain=cmake/${JERRY_TOOLCHAIN}
   #--build-type=Debug
-  --compile-flag="-DJERRY_NDEBUG=1 -DJERRY_LCACHE=0 -DJERRY_PROPRETY_HASHMAP=0"
+  --compile-flag="-DJERRY_NDEBUG=1 -DJERRY_LCACHE=0 -DJERRY_PROPRETY_HASHMAP=0 -Wno-unterminated-string-initialization"
   --lto=OFF
   --error-messages=ON
   --js-parser=ON
@@ -61,7 +61,7 @@ add_custom_command(OUTPUT ${JERRY_LIBS}
 
 add_custom_command(OUTPUT ${KALUMA_GENERATED_C}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  COMMAND python ${JERRY_ROOT}/tools/build.py --clean --jerry-cmdline-snapshot=ON --snapshot-save=ON --snapshot-exec=ON --profile=es.next #es2015-subset
+  COMMAND python ${JERRY_ROOT}/tools/build.py --clean --compile-flag=-Wno-unterminated-string-initialization --jerry-cmdline-snapshot=ON --snapshot-save=ON --snapshot-exec=ON --profile=es.next #es2015-subset
   COMMAND node tools/js2c.js --modules=${MODULE_LIST} --target=${TARGET} --board=${BOARD}
   COMMAND rm -rf lib/jerryscript/build)
 
