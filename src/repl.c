@@ -597,6 +597,7 @@ static void cmd_help(km_repl_state_t *state, char *arg) {
   km_repl_printf("\r\n");
   km_repl_printf("CTRL+C\tAbort running code\r\n");
   km_repl_printf("CTRL+D\tSoft reset\r\n");
+  km_repl_printf("CTRL+Z\tExit shell (kaluma --shell)\r\n");
 }
 
 // --------------------------------------------------------------------------
@@ -941,6 +942,16 @@ void km_repl_print_prompt() {
 }
 
 void km_repl_register_command(char *name, char *desc, km_repl_command_cb cb) {
+  // Idempotent: a command with the same name can be re-registered by a module
+  // on every program run (e.g. the fs module registers .ls, .cd, ...). Skip the
+  // append if it is already present so `.help` does not show duplicate lines.
+  for (km_repl_command_t *cmd = (km_repl_command_t *)state.commands.head;
+       cmd != NULL;
+       cmd = (km_repl_command_t *)((km_list_node_t *)cmd)->next) {
+    if (strcmp(cmd->name, name) == 0) {
+      return;
+    }
+  }
   km_repl_command_t *cmd = malloc(sizeof(km_repl_command_t));
   strcpy(cmd->name, name);
   strcpy(cmd->desc, desc);
