@@ -14,11 +14,11 @@ if(NOT BOARD)
 endif()
 
 if(BOARD STREQUAL "pico")
-  message(FATAL_ERROR "KalumaJS does not support pico board from version 1.3.0 please use 1.2.x version.")
-  # set(PICO_BOARD pico)
+  # Raspberry Pi Pico (RP2040)
+  set(PICO_BOARD pico)
 elseif(BOARD STREQUAL "pico-w")
-  message(FATAL_ERROR "KalumaJS does not support pico-w board from version 1.3.0 please use 1.2.x version.")
-  # set(PICO_BOARD pico_w)
+  # Raspberry Pi Pico W (RP2040 + CYW43 Wi-Fi/BT)
+  set(PICO_BOARD pico_w)
 elseif(BOARD STREQUAL "pico2")
   set(PICO_BOARD pico2)
 elseif(BOARD STREQUAL "pico2-w")
@@ -80,6 +80,26 @@ if(BOARD STREQUAL "pico-w")
 else()
   set(PICO_SDK_PATH ${CMAKE_SOURCE_DIR}/lib/pico-sdk)
 endif()
+
+# The vendored pico-sdk "pioasm" tool (a host C++ program built by the CYW43
+# WiFi driver for pico-w / pico2-w) relies on uint8_t/uint16_t without an
+# explicit #include <cstdint>. Older libstdc++ provided it transitively; GCC
+# 13+ no longer does, so the tool fails to compile with 'uint8_t does not name
+# a type' (and cascading 'used_gpio_ranges has no member' errors). We patch
+# the affected translation units at configure time (idempotent) so a fresh
+# clone with a modern host toolchain still builds the -w boards.
+set(_kaluma_pioasm_dir ${PICO_SDK_PATH}/tools/pioasm)
+foreach(_f pio_types.h output_format.h pio_assembler.cpp c_sdk_output.cpp python_output.cpp)
+  set(_kaluma_pioasm_file ${_kaluma_pioasm_dir}/${_f})
+  if(EXISTS ${_kaluma_pioasm_file})
+    file(READ ${_kaluma_pioasm_file} _kaluma_pioasm_src)
+    if(NOT _kaluma_pioasm_src MATCHES "#include[ \t]+<cstdint>")
+      file(WRITE ${_kaluma_pioasm_file} "#include <cstdint>\n${_kaluma_pioasm_src}")
+      message(STATUS "kaluma: added <cstdint> to pioasm/${_f} for modern host GCC")
+    endif()
+  endif()
+endforeach()
+
 include(${PICO_SDK_PATH}/pico_sdk_init.cmake)
 
 project(kaluma-project C CXX ASM)
