@@ -91,14 +91,14 @@ static void km_uid_init() {
 }
 
 static void km_pio_init() {
-  for (int i = 0; i < KALUMA_PIO_SM_NUM; i++) {
-    if (pio_sm_is_claimed(pio0, i))
-      pio_sm_unclaim(pio0, i);
-    if (pio_sm_is_claimed(pio1, i))
-      pio_sm_unclaim(pio1, i);
+  for (int b = 0; b < KALUMA_PIO_NUM; b++) {
+    PIO pio = pio_get_instance(b);
+    for (int i = 0; i < KALUMA_PIO_SM_NUM; i++) {
+      if (pio_sm_is_claimed(pio, i))
+        pio_sm_unclaim(pio, i);
+    }
+    pio_clear_instruction_memory(pio);
   }
-  pio_clear_instruction_memory(pio0);
-  pio_clear_instruction_memory(pio1);
 }
 
 /**
@@ -113,16 +113,15 @@ static void km_pio_init() {
  * lower and lower offsets until they failed (see issues #690 and #691).
  */
 static void km_pio_cleanup() {
-  for (int i = 0; i < KALUMA_PIO_SM_NUM; i++) {
-    pio_sm_set_enabled(pio0, i, false);
-    pio_sm_set_enabled(pio1, i, false);
-    if (pio_sm_is_claimed(pio0, i))
-      pio_sm_unclaim(pio0, i);
-    if (pio_sm_is_claimed(pio1, i))
-      pio_sm_unclaim(pio1, i);
+  for (int b = 0; b < KALUMA_PIO_NUM; b++) {
+    PIO pio = pio_get_instance(b);
+    for (int i = 0; i < KALUMA_PIO_SM_NUM; i++) {
+      pio_sm_set_enabled(pio, i, false);
+      if (pio_sm_is_claimed(pio, i))
+        pio_sm_unclaim(pio, i);
+    }
+    pio_clear_instruction_memory(pio);
   }
-  pio_clear_instruction_memory(pio0);
-  pio_clear_instruction_memory(pio1);
 }
 
 /**
