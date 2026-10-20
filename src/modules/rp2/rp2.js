@@ -413,15 +413,37 @@ class ASM {
 }
 
 class StateMachine {
-  static ids = [0, 4, 1, 5, 2, 6, 3, 7]
-  static getAvailableId() {
-    return StateMachine.ids.length > 0 ? StateMachine.ids[0] : null;
+  // Interleaved SM ids so that SMs on each PIO block are allocated round-robin
+  // (0,4,1,5,2,6,3,7) then, on the RP2350's third block (8,12,9,13,10,14,11,15).
+  static ids = [0, 4, 1, 5, 2, 6, 3, 7, 8, 12, 9, 13, 10, 14, 11, 15];
+
+  // Number of PIO blocks this chip actually has: 2 on RP2040 (Pico),
+  // 3 on RP2350 (Pico 2). Read from the native module (set by
+  // module_rp2_init from KALUMA_PIO_NUM); fall back to 2 (the RP2040 value) if
+  // it is missing so behaviour never regresses on older builds.
+  static get pioNum() {
+    const n = rp2_native && rp2_native.pioNum;
+    return (typeof n === "number" && n >= 2) ? n : 2;
   }
+
+  static getAvailableId() {
+    // Only offer SM ids that belong to PIO blocks this chip actually has.
+    const max = StateMachine.pioNum * 4; // 8 on RP2040, 12 on RP2350
+    const avail = StateMachine.ids.filter((id) => id < max);
+    return avail.length > 0 ? avail[0] : null;
+  }
+
   constructor(id, asm, options) {
+    if (typeof id !== "number" || id < 0 || id >= StateMachine.pioNum * 4) {
+      throw new RangeError(
+          `pio state machine id ${id} out of range: this chip has ` +
+          `${StateMachine.pioNum} PIO block(s), 4 SMs each (valid ids 0-${
+              StateMachine.pioNum * 4 - 1})`);
+    }
     StateMachine.ids.splice(StateMachine.ids.indexOf(id), 1);
-    this.pio = id > 3 ? 1 : 0;
-    this.sm = id - this.pio * 4;
-    if (!asm._pio) asm._pio = new Array(2);
+    this.pio = Math.floor(id / 4);
+    this.sm = id % 4;
+    if (!asm._pio) asm._pio = new Array(StateMachine.pioNum);
     if (!asm._pio[this.pio]) {
       const bin = asm.toBinary();
       this.offset = rp2_native.pio_add_program(this.pio, bin);

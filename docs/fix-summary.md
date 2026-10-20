@@ -205,6 +205,33 @@ lookups using the pico-sdk `pio_get_instance(index)` helper, guarded by
 confirmed: `__pio2_irq_0_handler` is **present** in `pico2`/`pico2-w` and
 **absent** from `pico`/`pico-w`, as expected for each chip.
 
+### 2.9 RP2350 (Pico 2) — `pio2` now usable from JavaScript + PIO test program
+
+Commit `fe030b7` fixed the **C** layer, but the public JS `StateMachine` still
+hard-capped at 2 blocks (`this.pio = id > 3 ? 1 : 0`, `asm._pio = new Array(2)`),
+so `pio = 2` was still unreachable from user code. This follow-up closes that gap
+and adds a small, self-verifying PIO test program:
+
+- **`src/modules/rp2/module_rp2.c`** — exports a `rp2.pioNum` number
+  (`KALUMA_PIO_NUM`: 2 on RP2040, 3 on RP2350) so the JS layer knows how many
+  blocks the chip actually has.
+- **`src/modules/rp2/rp2.js`** — `StateMachine` now maps any id with
+  `this.pio = floor(id/4)`, `this.sm = id % 4` (correct for 3 blocks), exposes
+  `StateMachine.pioNum` (falls back to 2 if the native value is missing, so
+  RP2040 behaviour never regresses), bounds-checks the id in the constructor,
+  and only offers SMs on blocks that exist. On a Pico 2 this unlocks SM ids 8–11
+  (block 2); on a Pico it is unchanged (ids 0–7 only).
+- **`tests/pio2.test.js`** (Node) — proves block-2 routing: SM ids 8–11 map to
+  block 2/SM 0–3 and 12 SMs are offered when `pioNum=3`; and ids ≥ 8 are rejected
+  with a clear error and only 8 SMs offered when `pioNum=2`.
+  **Result: 6 passed, 0 failed.**
+- **`tests/onboard/pio-test.js`** — a small on-board smoke test to run after
+  flashing. It reads `rp2.pioNum`, picks block 2 on a Pico 2 (block 0 on a Pico),
+  builds a 3-instruction program that drives the on-board LED (pin 25) and fires
+  the block's PIO IRQ 0, then checks the LED state and that the JS IRQ handler
+  ran, and prints **PASS/FAIL**. This exercises the exact new block-2 IRQ
+  dispatch path on hardware.
+
 ---
 
 ## 3. Testing
@@ -215,7 +242,19 @@ confirmed: `__pio2_irq_0_handler` is **present** in `pico2`/`pico2-w` and
   `process.binding`. Covers the `delay()` bounds rules (including sideset-dependent
   limits and optional-sideset cases) and the program-size limit.
   **Result: 9 passed, 0 failed.**
+- `tests/pio2.test.js` — same harness, focused on block-2 (pio2) routing in the
+  `StateMachine` layer: verifies SM ids 8–11 map to PIO block 2 / SM 0–3 and 12
+  SMs are offered when `pioNum=3`, and that id 8 is rejected (only 8 SMs offered)
+  when `pioNum=2` (RP2040). **Result: 6 passed, 0 failed.**
 - `node --check` passed on all modified/new JS files.
+
+### On-board smoke test (requires hardware)
+
+- `tests/onboard/pio-test.js` — flash a board, then `.load /pio-test.js` (or paste
+  into the REPL). It auto-selects PIO block 2 on a Pico 2 / block 0 on a Pico,
+  drives the on-board LED (pin 25) through the SM and checks the block's PIO IRQ 0
+  handler fired, then prints **PASS**/**FAIL**. This is the hardware verification
+  step for §2.8/§2.9 (the C `pio2` dispatch and the JS unlock).
 
 ### Firmware builds (arm-none-eabi-gcc 15.2 + cmake, all 4 boards)
 
@@ -233,6 +272,7 @@ To run the JS tests:
 
 ```bash
 node tests/rp2.test.js
+node tests/pio2.test.js
 ```
 
 ---
@@ -374,6 +414,15 @@ recorded only as "a token was provided".)
    > including updating the conversation user requests. Make note of the new
    > support of PIO on RP2350. Let me know if anything else needs addressed
    > before push to repo."
+
+10. **Write a PIO test program; push and merge.**
+   > "Go ahead write a small PIO test program. Then commit the docs and push
+   > everything to CanyonCasa/kaluma release-v1.5.0 branch and merge to master
+   > branch."
+   Delivered: JS unlock of PIO block 2 on the RP2350 (§2.9), a Node test
+   (`tests/pio2.test.js`), and an on-board smoke test
+   (`tests/onboard/pio-test.js`); all 5 boards rebuilt and re-verified; pushed
+   to `release-v1.5.0` and merged into `master`.
 
 > **Note on the token.** A GitHub personal access token was provided mid-session
 > to create the repository and push the branches. Its value is intentionally

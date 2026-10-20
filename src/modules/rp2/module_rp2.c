@@ -546,6 +546,9 @@ jerry_value_t module_rp2_init() {
 
   // pio module exports
   jerry_value_t exports = jerry_object();
+  // Number of PIO blocks on this chip (2 on RP2040, 3 on RP2350). Exposed so
+  // the JS StateMachine layer can know how many blocks are actually usable.
+  jerryxx_set_property_number(exports, "pioNum", KALUMA_PIO_NUM);
   jerryxx_set_property_function(exports, MSTR_RP2_PIO_ADD_PROGRAM,
                                 pio_add_program_fn);
   jerryxx_set_property_function(exports, MSTR_RP2_PIO_SM_INIT, pio_sm_init_fn);
