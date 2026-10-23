@@ -1,31 +1,27 @@
-# Kaluma USB fix — JerryScript stack overflow on RP2040/RP2350
+# Kaluma IO-loop diagnostic (corrected — with 32 KiB stack)
 
-## Diagnosis (confirmed by bisection)
-- **no-JS firmware** (`nojs-bisect` branch): USB enumerates, device alive.
-- **JS firmware**: no USB, device dead after `stdio_init`.
-- => the **JerryScript engine** is the culprit, not hardware/USB.
+## Why this one is different from the first io-diag
+The first io-diag was built off `master` (2 KiB stack) — it crashed immediately
+during `jerry_init`, before the io-loop instrumentation could even run. This
+version is built **on top of the 32 KiB stack fix**, matching the `led-diag`
+firmware that successfully showed 4 blinks (engine up) before faulting.
 
-## Root cause
-Kaluma never overrode `PICO_STACK_SIZE`, so it used the pico-sdk default
-**`0x800` = 2 KiB** for the main thread. JerryScript 3.0.0's recursive
-GC/parser/VM init needs far more, overflows the 2 KiB stack during
-`jerry_init`, and hard-faults. Kaluma's default fault handler is a bare
-`bkpt` (silent death), so the device dies *before* USB enumeration completes
-=> "not recognized."
+## What you should see now (same as led-diag + more detail)
+1. **4 slow blinks** (engine init + runtime init)
+2. Then the io-loop ticks start: **1 slow blink** (before call 1), then if it
+   survives, **2 slow blinks** (before call 2), etc.
+3. If a call faults → **6 fast blinks** (HardFault handler).
 
-This is a **shared** default, which is why **both** the RP2040 Pico *and* the
-RP2350 Pico2-w fail identically, and why removing JS fixes both.
+So count the **slow blinks after the initial 4**:
+- 1 slow → fault in `km_io_update_time`
+- 2 slow → fault in `km_io_timer_run`
+- 3 slow → fault in `km_io_tty_run`
+- 4 slow → fault in `km_io_watch_run`
+- 5 slow → fault in `km_io_uart_run`
+- **6 slow → fault in `km_io_idle_run` (jerry_run_jobs — JS idler)**
+- 7 slow → fault in `km_io_handle_closing`
+- 8 slow → fault in `km_custom_infinite_loop`
 
-## The fix
-Set a proper main-thread stack in `targets/rp2/target.cmake`:
-- RP2040 (Pico): `PICO_STACK_SIZE=0x8000` (32 KiB)
-- RP2350 (Pico2): `PICO_STACK_SIZE=0x10000` (64 KiB)
-
-Both still fit in SRAM:
-- Pico: 190.7 KiB (heap+bss) + 32 KiB stack ≈ 223 KiB < 264 KiB
-- Pico2-w: 231.9 KiB (heap+bss) + 64 KiB stack ≈ 296 KiB < 528 KiB
-
-## Test
-Flash `fix-pico-rp2040-stack.uf2` (Pico) / `fix-pico2w-rp2350-stack.uf2`
-(Pico2-w) and check that **both the COM port appears AND the REPL welcome
-banner shows up** in your serial monitor.
+## Files
+- `io-diag-pico.uf2`    — Pico (RP2040), 32 KiB stack
+- `io-diag-pico2w.uf2`  — Pico2-w (RP2350), 64 KiB stack

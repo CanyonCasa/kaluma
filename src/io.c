@@ -105,15 +105,30 @@ void km_io_cleanup() {
 }
 
 void km_io_run(bool infinite) {
+  int iter = 0;
   while (loop.stop_flag == false) {
-    km_io_update_time();
-    km_io_timer_run();
-    km_io_tty_run();
-    km_io_watch_run();
-    km_io_uart_run();
-    km_io_idle_run();
-    km_io_handle_closing();
-    km_custom_infinite_loop();
+    if (++iter <= 2) {
+      /* DIAG: blink N (call index) before each call; a fault = "N blinks then
+         stops". 6 = km_io_idle_run (jerry_run_jobs, the JS-context call). */
+      extern void __diag_mark(int);
+      __diag_mark(1); km_io_update_time();
+      __diag_mark(2); km_io_timer_run();
+      __diag_mark(3); km_io_tty_run();
+      __diag_mark(4); km_io_watch_run();
+      __diag_mark(5); km_io_uart_run();
+      __diag_mark(6); km_io_idle_run();
+      __diag_mark(7); km_io_handle_closing();
+      __diag_mark(8); km_custom_infinite_loop();
+    } else {
+      km_io_update_time();
+      km_io_timer_run();
+      km_io_tty_run();
+      km_io_watch_run();
+      km_io_uart_run();
+      km_io_idle_run();
+      km_io_handle_closing();
+      km_custom_infinite_loop();
+    }
 
     // quite if there no IO handles
     if (!infinite) {
