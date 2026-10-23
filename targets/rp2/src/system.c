@@ -127,18 +127,32 @@ static void km_pio_cleanup() {
 /**
  * Kaluma Hardware System Initializations
  */
+/* DIAGNOSTIC: declared in main.c (instrumented build only). */
+extern void __diag_mark(const char *s);
+
 void km_system_init() {
   stdio_init_all();
+  __diag_mark("B1: stdio_init_all done (USB up)");
   km_uid_init();
+  __diag_mark("B2: uid");
   km_pio_init();
+  __diag_mark("B3: pio");
   km_gpio_init();
+  __diag_mark("B4: gpio (re-inits all 30 pins)");
   km_adc_init();
+  __diag_mark("B5: adc");
   km_pwm_init();
+  __diag_mark("B6: pwm");
   km_i2c_init();
+  __diag_mark("B7: i2c");
   km_spi_init();
+  __diag_mark("B8: spi");
   km_uart_init();
+  __diag_mark("B9: uart");
   km_rtc_init();
+  __diag_mark("B10: rtc");
   km_flash_init();
+  __diag_mark("B11: flash (system_init done)");
 }
 
 void km_system_cleanup() {

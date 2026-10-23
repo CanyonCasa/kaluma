@@ -81,21 +81,31 @@ static void idler_cb() {
 // PUBLIC FUNCTIONS
 // --------------------------------------------------------------------------
 
+/* DIAGNOSTIC: declared in main.c (instrumented build only). */
+extern void __diag_mark(const char *s);
+
 void km_runtime_init(bool load, bool first) {
+  __diag_mark("G1: before jerry_init (JS engine start - PRIME SUSPECT)");
   jerry_init(JERRY_INIT_EMPTY);
+  __diag_mark("G2: after jerry_init (JS engine UP)");
   jerry_halt_handler(16, vm_exec_stop_callback, &km_runtime_vm_stop);
   jerry_register_magic_strings(magic_string_items, num_magic_string_items,
                                magic_string_lengths);
+  __diag_mark("G3: after magic strings");
   km_global_init();
+  __diag_mark("G4: after km_global_init");
   jerry_heap_gc(JERRY_GC_PRESSURE_HIGH);
   if (load) {
+    __diag_mark("G5: before km_runtime_load (load user script)");
     km_runtime_load();
+    __diag_mark("G6: after km_runtime_load");
   }
   if (first) {
     // Initialize idler handle for queued jobs in jerryscript
     km_io_idle_init(&idler);
     km_io_idle_start(&idler, idler_cb);
   }
+  __diag_mark("G7: runtime_init complete");
 }
 
 void km_runtime_cleanup() {
