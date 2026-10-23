@@ -1,6 +1,6 @@
 # Kaluma LED + HardFault diagnostic (corrected)
 
-This runs the REAL Kaluma boot path (incl. JS engine) with a **visible ~400 ms
+This runs the REAL Kaluma boot path (incl. JS engine) with a **visible ~500 ms (reliable sleep_ms-based) per phase
 LED blink per phase** and a **HardFault reporter** (overrides pico-sdk's silent
 `bkpt`). Fixes the earlier LED bug: `km_gpio_init()` re-inits pin 25 to input,
 so we re-claim the LED after `km_system_init()`.

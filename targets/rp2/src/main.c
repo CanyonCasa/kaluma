@@ -31,10 +31,13 @@
 #include "tty.h"
 #include <stdio.h>
 
-#define DIAG_LED 25
-#define BLINK_SPIN 3000000   /* ~300-400 ms at 125 MHz */
+#include "pico/stdlib.h"   /* for sleep_ms - reliable timing */
 
-static void __led(void) { gpio_put(DIAG_LED, 1); for (volatile int i = 0; i < BLINK_SPIN; i++); gpio_put(DIAG_LED, 0); for (volatile int i = 0; i < BLINK_SPIN; i++); }
+#define DIAG_LED 25
+#define BLINK_MS 500        /* ~500 ms on / ~500 ms off per step: clearly countable */
+#define FAULT_MS 60         /* short blinks for the 6-tick HARDFAULT pattern */
+
+static void __led(void) { gpio_put(DIAG_LED, 1); sleep_ms(BLINK_MS); gpio_put(DIAG_LED, 0); sleep_ms(BLINK_MS); }
 static void __claim_led(void) { gpio_init(DIAG_LED); gpio_set_dir(DIAG_LED, GPIO_OUT); gpio_put(DIAG_LED, 0); }
 
 /* --- HardFault reporter (overrides pico-sdk's silent `bkpt` default) --- */
