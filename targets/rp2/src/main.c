@@ -1,14 +1,36 @@
-/* IO-LOOP diagnostic: locate the exact call in km_io_run that faults.
+/* COMBINED diagnostic: led-diag boot-phase delays + io-diag io-loop ticks
+ * + HardFault reporter + (32/64 KiB stack lives in targets/rp2/target.cmake).
  *
- * After km_runtime_init() (JS engine is up), we enter km_io_run(). src/io.c
- * now calls __diag_mark(N) before each of the 8 calls in the loop:
- *   1 km_io_update_time   4 km_io_watch_run    7 km_io_handle_closing
- *   2 km_io_timer_run     5 km_io_uart_run     8 km_custom_infinite_loop
- *   3 km_io_tty_run       6 km_io_idle_run     (JS: jerry_run_jobs)
+ * WHY the boot-phase delays matter: USB-CDC enumeration takes ~1 s on the host.
+ * If the device hard-faults before that, "no USB". The led-diag firmware
+ * inserted 4 slow (500 ms) blinks DURING the boot phase, which gave the host
+ * time to enumerate (that's why USB appeared there). This combined firmware
+ * keeps those delays AND adds per-call ticks inside km_io_run, so we see
+ * BOTH "engine comes up" (4 boot blinks) AND "which io-loop call faults".
  *
- * __diag_mark(N) blinks N SLOW blinks (500 ms). A hard-fault then triggers the
- * reporter (6 FAST blinks). So "N slow blinks, then a fast flicker" == the
- * fault is inside call #N. (No JS engine init blinks here to avoid confusion.)
+ * LED = GPIO 25 (Pico). SLOW blink = 500 ms on / 500 ms off.
+ *
+ * Sequence you should see:
+ *   [USB starts inside km_system_init]
+ *   BOOT  : 1 slow blink  = km_system_init done
+ *           2 slow blinks = km_tty_init + km_io_init done
+ *           3 slow blinks = km_repl_init done
+ *           4 slow blinks = km_runtime_init done (JS engine UP)
+ *   IOLOOP: then per-call ticks from io.c's __diag_mark(N) = N slow blinks:
+ *           1 = before km_io_update_time
+ *           2 = before km_io_timer_run
+ *           3 = before km_io_tty_run
+ *           4 = before km_io_watch_run
+ *           5 = before km_io_uart_run
+ *           6 = before km_io_idle_run  (JERRY: jerry_run_jobs)
+ *           7 = before km_io_handle_closing
+ *           8 = before km_custom_infinite_loop
+ *   FAULT : 6 FAST blinks = HARDFAULT fired (overrides pico-sdk's silent bkpt)
+ *
+ * READ: after the 4 boot blinks, count slow blinks until the 6-fast flicker.
+ * That number = the io-loop call that is faulting. If you never get past the
+ * boot phase (faults before/during a boot blink), the fault is in that boot
+ * call (engine init etc.).
  */
 #include "board.h"
 #include "gpio.h"
@@ -23,13 +45,19 @@
 
 #define DIAG_LED 25
 
-void __claim_led(void) { gpio_init(DIAG_LED); gpio_set_dir(DIAG_LED, GPIO_OUT); gpio_put(DIAG_LED, 0); }
-static void __one_blink(void) { gpio_put(DIAG_LED, 1); sleep_ms(500); gpio_put(DIAG_LED, 0); sleep_ms(500); }
+static void __claim_led(void) { gpio_init(DIAG_LED); gpio_set_dir(DIAG_LED, GPIO_OUT); gpio_put(DIAG_LED, 0); }
+static void __slow_blink(void) { gpio_put(DIAG_LED, 1); sleep_ms(500); gpio_put(DIAG_LED, 0); sleep_ms(500); }
 
-/* io.c's weak hook: blink `n` times (n = call index about to run). */
-void __diag_mark(int n) { for (int i = 0; i < n; i++) __one_blink(); }
+/* Boot-phase tick (defined in main, used here). */
+void __boot_tick(void) { __slow_blink(); }
 
-/* --- HardFault reporter (6 FAST blinks, distinct from the slow ticks) --- */
+/* io.c's weak hook: blink ONCE (one slow blink) before each io-loop call.
+   So the number of slow blinks you see after the 4 boot blinks = the index of
+   the call about to run when the fault hits. 1=update_time, 2=timer, 3=tty,
+   4=watch, 5=uart, 6=idle_run(JERRY), 7=closing, 8=custom. */
+void __diag_mark(int n) { (void)n; __slow_blink(); }
+
+/* --- HardFault reporter: 6 FAST blinks (distinct from the slow ticks) --- */
 void __diag_fault_report(uint32_t *f) {
   char b[96];
   int n = 0;
@@ -45,12 +73,21 @@ void isr_hardfault(void) { __asm volatile("mov r0, sp\n" "b __diag_fault_report\
 
 int main(void) {
   __claim_led();
-  km_system_init();                 /* includes stdio_init_all (USB) */
-  __claim_led();                    /* re-claim: km_gpio_init reset the LED pin */
+
+  km_system_init();      /* includes stdio_init_all (USB) + km_gpio_init (resets LED) */
+  __claim_led();         /* re-claim after km_gpio_init re-inited pin 25 to input */
+  __boot_tick();         /* 1 slow blink: USB should be up now */
+
   bool load = km_running_script_check();
   km_tty_init();
   km_io_init();
+  __boot_tick();         /* 2 slow blinks total */
+
   km_repl_init(true);
-  km_runtime_init(load, true);      /* JS engine up */
-  km_io_run(true);                  /* the faulting loop -- now instrumented */
+  __boot_tick();         /* 3 slow blinks total */
+
+  km_runtime_init(load, true);   /* JS engine up */
+  __boot_tick();         /* 4 slow blinks total: JS engine up */
+
+  km_io_run(true);       /* io loop -- instrumented per-call in io.c */
 }
