@@ -1,31 +1,26 @@
-# Kaluma USB fix — JerryScript stack overflow on RP2040/RP2350
+# Kaluma LED + HardFault diagnostic (corrected)
 
-## Diagnosis (confirmed by bisection)
-- **no-JS firmware** (`nojs-bisect` branch): USB enumerates, device alive.
-- **JS firmware**: no USB, device dead after `stdio_init`.
-- => the **JerryScript engine** is the culprit, not hardware/USB.
+This runs the REAL Kaluma boot path (incl. JS engine) with a **visible ~400 ms
+LED blink per phase** and a **HardFault reporter** (overrides pico-sdk's silent
+`bkpt`). Fixes the earlier LED bug: `km_gpio_init()` re-inits pin 25 to input,
+so we re-claim the LED after `km_system_init()`.
 
-## Root cause
-Kaluma never overrode `PICO_STACK_SIZE`, so it used the pico-sdk default
-**`0x800` = 2 KiB** for the main thread. JerryScript 3.0.0's recursive
-GC/parser/VM init needs far more, overflows the 2 KiB stack during
-`jerry_init`, and hard-faults. Kaluma's default fault handler is a bare
-`bkpt` (silent death), so the device dies *before* USB enumeration completes
-=> "not recognized."
+## Read the Pico (LED = GPIO 25)
+Flash, reset, then count the visible blinks BEFORE it freezes:
 
-This is a **shared** default, which is why **both** the RP2040 Pico *and* the
-RP2350 Pico2-w fail identically, and why removing JS fixes both.
+| Blinks before freeze | Where it dies |
+|---|---|
+| 0 (never blinks) | crash in `km_system_init` (but no-JS proved this phase is OK) |
+| 1, then freeze | `km_tty_init` / `km_io_init` |
+| 2, then freeze | `km_repl_init` |
+| 3, then freeze | `km_runtime_init` → **`jerry_init` or `km_global_init`** (PRIME SUSPECT) |
+| 4, then freeze | `km_io_run` / io loop |
+| **6 FAST blinks, repeating** | **HARDFAULT** fired (PC/LR also printed if the port ever enumerates) |
 
-## The fix
-Set a proper main-thread stack in `targets/rp2/target.cmake`:
-- RP2040 (Pico): `PICO_STACK_SIZE=0x8000` (32 KiB)
-- RP2350 (Pico2): `PICO_STACK_SIZE=0x10000` (64 KiB)
+"Freeze" (LED solid on, or stops) = hang. "6 fast blinks" = hard fault.
+This distinguishes a **crash (where)** from a **hang (where)** — the data we
+need to pick the real fix, since the 32 KiB stack bump alone did not fix it.
 
-Both still fit in SRAM:
-- Pico: 190.7 KiB (heap+bss) + 32 KiB stack ≈ 223 KiB < 264 KiB
-- Pico2-w: 231.9 KiB (heap+bss) + 64 KiB stack ≈ 296 KiB < 528 KiB
-
-## Test
-Flash `fix-pico-rp2040-stack.uf2` (Pico) / `fix-pico2w-rp2350-stack.uf2`
-(Pico2-w) and check that **both the COM port appears AND the REPL welcome
-banner shows up** in your serial monitor.
+## Files
+- `led-diag-pico.uf2`    — Pico (RP2040)
+- `led-diag-pico2w.uf2`  — Pico2-w (RP2350)
