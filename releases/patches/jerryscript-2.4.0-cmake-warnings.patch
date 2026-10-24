@@ -1,0 +1,16 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 43ac22e..8508a91 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -212,7 +212,10 @@ if(USING_GCC OR USING_CLANG)
+     jerry_add_compile_flags(-fno-builtin)
+   endif()
+   jerry_add_compile_warnings(all extra format-nonliteral init-self conversion sign-conversion format-security missing-declarations shadow strict-prototypes undef old-style-definition)
+-  jerry_add_compile_flags(-Wno-stack-protector -Wno-attributes -Werror)
++  # Kaluma v1.2.1 (JerryScript 2.4.0) predates the host GCC here; suppress the
++  # false-positive warnings that -Werror would otherwise promote to errors
++  # (e.g. maybe-uninitialized, unterminated-string-initialization).
++  jerry_add_compile_flags(-Wno-stack-protector -Wno-attributes -Wno-maybe-uninitialized -Wno-unterminated-string-initialization -Wno-error)
+ endif()
+ 
+ if(USING_GCC)

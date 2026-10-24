@@ -22,7 +22,10 @@ set(JERRY_INC
 set(JERRY_ARGS
   --toolchain=cmake/${JERRY_TOOLCHAIN}
   #--build-type=Debug
-  --compile-flag="-DJERRY_NDEBUG=1 -DJERRY_LCACHE=0 -DJERRY_PROPRETY_HASHMAP=0"
+  --compile-flag=-DJERRY_NDEBUG=1
+  --compile-flag=-DJERRY_LCACHE=0
+  --compile-flag=-DJERRY_PROPRETY_HASHMAP=0
+  --compile-flag=-Wno-unterminated-string-initialization
   --lto=OFF
   --error-messages=ON
   --js-parser=ON

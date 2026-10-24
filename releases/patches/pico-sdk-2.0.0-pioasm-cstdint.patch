@@ -1,0 +1,18 @@
+diff --git a/tools/pioasm/output_format.h b/tools/pioasm/output_format.h
+index 405a5ae..5e90ac9 100644
+--- a/tools/pioasm/output_format.h
++++ b/tools/pioasm/output_format.h
+@@ -1,3 +1,4 @@
++#include <cstdint>
+ /*
+  * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+  *
+diff --git a/tools/pioasm/pio_types.h b/tools/pioasm/pio_types.h
+index 9f9fb0e..e5dad74 100644
+--- a/tools/pioasm/pio_types.h
++++ b/tools/pioasm/pio_types.h
+@@ -1,3 +1,4 @@
++#include <cstdint>
+ /*
+  * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
+  *
