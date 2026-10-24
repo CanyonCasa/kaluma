@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 314d5ada..26794faa 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -224,7 +224,7 @@ if(USING_GCC OR USING_CLANG)
+   if(NOT "${PLATFORM}" STREQUAL "WINDOWS")
+     jerry_add_compile_warnings(conversion)
+   endif()
+-  jerry_add_compile_flags(-Wno-stack-protector -Wno-attributes -Werror)
++  jerry_add_compile_flags(-Wno-stack-protector -Wno-attributes -Wno-maybe-uninitialized -Wno-unterminated-string-initialization -Wno-error)
+ endif()
+ 
+ if(USING_GCC)
