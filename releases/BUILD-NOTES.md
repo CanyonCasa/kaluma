@@ -4,8 +4,8 @@ Build notes, pedigree, and the fixes included in these firmware files.
 
 | File | Board | Size | SHA-256 |
 |---|---|---|---|
-| `kaluma-rp2-pico2-1.3.5.uf2` | Raspberry Pi Pico 2 (RP2350) | ~1.07 MB | `8331e87aff0a488384319a25b0ad73e55c3c36e72c9192561bd93f96a9484156` |
-| `kaluma-rp2-pico2-w-1.3.5.uf2` | Raspberry Pi Pico 2 W (RP2350 + CYW43) | ~1.70 MB | `f7a90fe8444322a4dfe430d72121f3e98f094aba61f2302fecec72a0f030482a` |
+| `kaluma-rp2-pico2-1.3.5.uf2` | Raspberry Pi Pico 2 (RP2350) | ~1.07 MB | `271ef651c4f75dccc134577ecc287145790cf0dca30d7b2b573eb7629810b3e0` |
+| `kaluma-rp2-pico2-w-1.3.5.uf2` | Raspberry Pi Pico 2 W (RP2350 + CYW43) | ~1.70 MB | `1a354487989739443b51559e0a2849406763cddcef6a1337893fba6ebb61b6d8` |
 
 Flash by holding `BOOTSEL` while plugging in USB and dropping the `.uf2` onto the
 `RP2350` mass-storage volume that appears.
@@ -47,7 +47,28 @@ RP2350 line.
 
 ---
 
-## 2. The three PIO / REPL fixes
+## 2. PIO block 2 (the RP2350's third PIO block)
+
+The RP2350 has **three** PIO blocks (`pio0`, `pio1`, `pio2`) and 12 state
+machines (SMs 0–11), but upstream 1.3.0 hardcoded `KALUMA_PIO_NUM 2` in the Pico 2
+board headers and used a 2-block mapping in `rp2.js`, so **SM ids 8–11 (block 2)
+were unreachable**. This build enables the full 3 blocks (port of the v1.5.0
+commit `b412cb9` "enable PIO block 2 (pio2) from JavaScript"):
+
+- `targets/rp2/boards/pico2/board.h` + `pico2-w/board.h`: `KALUMA_PIO_NUM` 2 → **3**.
+- `src/modules/rp2/module_rp2.c`: uses the SDK's `NUM_PIOS`/`pio_get_instance()`
+  to support any number of blocks, registers `__pio2_irq_0_handler`, and exposes
+  `rp2_native.pioNum` (3 on Pico 2) to JavaScript.
+- `src/modules/rp2/rp2.js`: `StateMachine` maps `id → (block, sm)` with
+  `floor/mod` over `StateMachine.pioNum` (3 on Pico 2), exposes SM ids 8–15,
+  bounds-checks the id, and only offers SMs on blocks that exist.
+- `targets/rp2/src/system.c`: `km_pio_cleanup()` now releases **all** blocks
+  (loops `KALUMA_PIO_NUM`) so block 2's SMs and instruction memory are reclaimed.
+
+Verified: the `__pio2_irq_0_handler` symbol is present (text) in the Pico 2 /
+Pico 2 W ELFs and `pioNum` is exported to JS.
+
+## 3. The three PIO / REPL fixes
 
 Ported from the community branch `fix/pio-and-repl-issues` (commits `361f9a0`,
 `eb6a0ba`, `6b980f3`), which targeted the v1.5.0 base. For 1.3.0 two of the three
@@ -75,7 +96,7 @@ duplicate `.help` lines; `.help` now documents `CTRL+Z` (issue #686).
 
 ---
 
-## 3. Build-system fixes required for a modern host toolchain
+## 4. Build-system fixes required for a modern host toolchain
 
 1.3.0 (and its 2019–2021-era submodules) predate the host compiler here; three
 issues surfaced and were fixed so it builds at all. The two in submodules are
@@ -100,7 +121,7 @@ cd ../pico-sdk     && git apply ../../releases/patches/pico-sdk-pioasm-cstdint.p
 
 ---
 
-## 4. Build recipe
+## 5. Build recipe
 
 ### Toolchain used
 | Component | Version |
@@ -135,7 +156,7 @@ Version string is `CMakeLists.txt` → `set(VER "1.3.5")`, driving the output na
 
 ---
 
-## 5. Verification
+## 6. Verification
 
 * **Fixes present in the ELF** — `km_pio_cleanup` (`pio_sm_unclaim` /
   `pio_clear_instruction_memory` symbols) confirmed in the Pico 2 firmware; the

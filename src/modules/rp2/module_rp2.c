@@ -51,13 +51,19 @@
 
 static jerry_value_t __pio_call_back[KALUMA_PIO_NUM];
 
+// IRQ number for each PIO block (block 0, 1, and block 2 on the RP2350).
+#if NUM_PIOS > 2
+static const uint32_t __pio_irq_num[NUM_PIOS] = {
+    PIO0_IRQ_0, PIO1_IRQ_0, PIO2_IRQ_0};
+#else
+static const uint32_t __pio_irq_num[NUM_PIOS] = {PIO0_IRQ_0, PIO1_IRQ_0};
+#endif
+
 static PIO __pio(uint8_t pio) {
-  if (pio == 0) {
-    return pio0;
-  } else if (pio == 1) {
-    return pio1;
+  if (pio >= NUM_PIOS) {
+    return NULL;
   }
-  return NULL;
+  return pio_get_instance(pio);
 }
 
 void __pio_handler(uint8_t pio, uint8_t interrupt) {
@@ -76,21 +82,27 @@ void __pio_handler(uint8_t pio, uint8_t interrupt) {
   }
 }
 
-void __pio0_irq_0_handler(void) {
-  PIO _pio = __pio(0);
+void __pio_irq_dispatch(uint8_t block) {
+  PIO _pio = __pio(block);
+  if (!_pio) return;
   uint32_t ints = _pio->ints0;
   ints >>= 8;
   _pio->irq = ints;
-  __pio_handler(0, ints);
+  __pio_handler(block, ints);
 }
 
-void __pio1_irq_0_handler(void) {
-  PIO _pio = __pio(1);
-  uint32_t ints = _pio->ints0;
-  ints >>= 8;
-  _pio->irq = ints;
-  __pio_handler(1, ints);
-}
+void __pio0_irq_0_handler(void) { __pio_irq_dispatch(0); }
+void __pio1_irq_0_handler(void) { __pio_irq_dispatch(1); }
+#if NUM_PIOS > 2
+void __pio2_irq_0_handler(void) { __pio_irq_dispatch(2); }
+#endif
+
+static void (*__pio_irq_handler_table[NUM_PIOS])(void) = {
+    __pio0_irq_0_handler, __pio1_irq_0_handler
+#if NUM_PIOS > 2
+    , __pio2_irq_0_handler
+#endif
+};
 
 JERRYXX_FUN(pio_add_program_fn) {
   JERRYXX_CHECK_ARG_NUMBER(0, "pio");
@@ -382,17 +394,14 @@ JERRYXX_FUN(pio_sm_irq_fn) {
   JERRYXX_CHECK_ARG_NUMBER(0, "pio");
   JERRYXX_CHECK_ARG_FUNCTION(1, "callback");
   uint8_t pio = (uint8_t)JERRYXX_GET_ARG_NUMBER(0);
+  if (pio >= KALUMA_PIO_NUM) {
+    return jerry_error_sz(JERRY_ERROR_RANGE, "pio index out of range");
+  }
   jerry_value_t callback = JERRYXX_GET_ARG(1);
   PIO _pio = __pio(pio);
-  if (pio == 0) {
-    _pio->inte0 = __PIO_INT_FULL;
-    irq_set_mask_enabled((1u << PIO0_IRQ_0), true);
-    irq_set_enabled(PIO0_IRQ_0, true);
-  } else {
-    _pio->inte0 = __PIO_INT_FULL;
-    irq_set_mask_enabled((1u << PIO1_IRQ_0), true);
-    irq_set_enabled(PIO1_IRQ_0, true);
-  }
+  _pio->inte0 = __PIO_INT_FULL;
+  irq_set_mask_enabled((1u << __pio_irq_num[pio]), true);
+  irq_set_enabled(__pio_irq_num[pio], true);
   __pio_call_back[pio] = jerry_value_copy(callback);
 
   return jerry_undefined();
@@ -529,14 +538,17 @@ JERRYXX_FUN(random_big_int_fn) {
  * Initialize 'rp2' module and return exports
  */
 jerry_value_t module_rp2_init() {
-  irq_set_exclusive_handler(PIO0_IRQ_0, __pio0_irq_0_handler);
-  irq_set_exclusive_handler(PIO1_IRQ_0, __pio1_irq_0_handler);
   for (int i = 0; i < KALUMA_PIO_NUM; i++) {
+    irq_set_exclusive_handler(__pio_irq_num[i],
+                              __pio_irq_handler_table[i]);
     __pio_call_back[i] = jerry_undefined();
   }
 
   // pio module exports
   jerry_value_t exports = jerry_object();
+  // Number of PIO blocks on this chip (2 on RP2040, 3 on RP2350). Exposed so
+  // the JS StateMachine layer can know how many blocks are actually usable.
+  jerryxx_set_property_number(exports, "pioNum", KALUMA_PIO_NUM);
   jerryxx_set_property_function(exports, MSTR_RP2_PIO_ADD_PROGRAM,
                                 pio_add_program_fn);
   jerryxx_set_property_function(exports, MSTR_RP2_PIO_SM_INIT, pio_sm_init_fn);

@@ -83,7 +83,7 @@
 #define KALUMA_UART_NUM 2
 // #define KALUMA_LED_NUM 1
 // #define KALUMA_BUTTON_NUM 0
-#define KALUMA_PIO_NUM 2
+#define KALUMA_PIO_NUM 3     // RP2350 has 3 PIO blocks (pio0, pio1, pio2)
 #define KALUMA_PIO_SM_NUM 4
 
 #define ADC_RESOLUTION_BIT 12
